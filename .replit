@@ -24,3 +24,8 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+VITE_OPENROUTER_API_KEY = "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"

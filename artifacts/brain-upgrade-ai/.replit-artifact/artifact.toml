@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Brain Upgrade AI"
+version = "1.0.0"
+id = "artifacts/brain-upgrade-ai"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21394
+
+[services.development]
+run = "pnpm --filter @workspace/brain-upgrade-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/brain-upgrade-ai", "run", "build" ]
+publicDir = "artifacts/brain-upgrade-ai/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21394"
+BASE_PATH = "/"

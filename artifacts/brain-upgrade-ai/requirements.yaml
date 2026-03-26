@@ -1,0 +1,20 @@
+packages:
+  "framer-motion": "For smooth micro-animations, page transitions, and complex interactive UI elements"
+  "recharts": "For the advanced visual analytics, radar charts, and trend line charts"
+  "date-fns": "For formatting history dates and daily streaks"
+  "lucide-react": "For beautiful consistent iconography across the app"
+  "clsx": "For merging tailwind classes"
+  "tailwind-merge": "For merging tailwind classes"
+
+images:
+  - path: "artifacts/brain-upgrade-ai/public/images/cyber-bg.png"
+    description: "Deep dark futuristic cyberpunk background texture with subtle glowing grid lines, dark navy and pitch black with faint cyan light leaks, minimal, UI background"
+    aspect_ratio: "16:9"
+  - path: "artifacts/brain-upgrade-ai/public/images/avatar.png"
+    description: "Cool stylized cyberpunk stylized human avatar face silhouette, glowing neon purple and cyan, dark background, minimal flat vector style"
+    aspect_ratio: "1:1"
+
+notes:
+  - App relies entirely on LocalStorage for persistent user data (no backend required).
+  - OpenRouter API calls made directly from the client using VITE_OPENROUTER_API_KEY.
+  - UI is strictly dark mode with heavy neon cyberpunk aesthetics.
