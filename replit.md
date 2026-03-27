@@ -1,96 +1,110 @@
-# Workspace
+# Brain Upgrade AI — Project Documentation
 
 ## Overview
+A production-level brain training web app built with React + Vite. Dark cyberpunk theme (black/navy, neon cyan/purple). Inspired by Lumosity + Peak + AI lab.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+## Tech Stack
+- **Framework**: React 18 + Vite 7 + TypeScript
+- **Routing**: wouter
+- **Styling**: Tailwind CSS + custom cyberpunk CSS (glassmorphism, glow effects)
+- **Animation**: Framer Motion
+- **Charts**: Recharts (RadarChart, AreaChart, LineChart, BarChart)
+- **Icons**: Lucide React
+- **State**: React Context + localStorage
+- **AI**: OpenRouter API (model: openai/gpt-4o-mini) via `VITE_OPENROUTER_API_KEY`
+- **Date utils**: date-fns
 
-## Stack
+## Architecture
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+### Entry Points
+- `src/App.tsx` — Router, QueryClientProvider, AppProvider wrapper
+- `src/context/AppContext.tsx` — Global state: XP, level, energy (1000/day), stats, sessions, highScores
 
-## Structure
+### Pages (src/pages/)
+| Page | Route | Description |
+|------|-------|-------------|
+| Home | / | Dashboard: brain score, featured games, recent sessions, stats |
+| Games | /games | Mini-games hub: 13 interactive games, category filter |
+| GamePlay | /play/:id | Game wrapper: lobby → playing → result with XP/analytics tracking |
+| Train | /train | MCQ training modules (8 modes) |
+| Challenge | /challenge?mode=X | AI-powered MCQ challenge |
+| Analytics | /analytics | Brain analytics: radar, heatmaps, trends, brain report |
+| Missions | /missions | Daily/weekly missions |
+| Stats | /stats | Detailed stats |
+| SkillTree | /skilltree | Skill unlock tree |
+| Profile | /profile | User profile |
+| Settings | /settings | App settings |
 
-```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+### Mini-Games (src/games/)
+13 real interactive games, all feed into analytics:
+
+| Game ID | File | Domain |
+|---------|------|--------|
+| falling-clouds | FallingClouds.tsx | Speed Math — math problems fall, tap correct answer |
+| bubble-pop | BubblePop.tsx | Speed Math — pop bubbles with correct answers |
+| math-blaster | MathBlaster.tsx | Speed Math — rapid fire with timer |
+| color-sequence | ColorSequence.tsx | Memory — Simon Says colors |
+| memory-cards | MemoryCardFlip.tsx | Memory — card pair matching |
+| pattern-simon | PatternSimon.tsx | Memory — 4-pad sequence |
+| stroop | StroopChallenge.tsx | Focus — color vs word conflict |
+| number-tap | NumberTap.tsx | Focus — tap 1→25 in order |
+| target-tap | TargetTap.tsx | Speed — moving target precision |
+| speed-sort | SpeedSort.tsx | Logic — sort numbers fast |
+| word-scramble | WordScramble.tsx | Verbal — unscramble words |
+| dual-task | DualTask.tsx | Multitask — math + color recall simultaneously |
+| reaction-chain | ReactionChain.tsx | Speed — only tap target color |
+
+### Game Engine (src/games/gameEngine.ts)
+100+ MCQ question types for the Train/Challenge modes:
+- Math (25 types), Logic (15), Memory (11), IQ (11), Speed, Pattern
+
+### AI Service (src/services/aiService.ts)
+- Calls OpenRouter API with `VITE_OPENROUTER_API_KEY`
+- Model: `openai/gpt-4o-mini`
+- Generates MCQs for challenge mode
+
+## State Management
+
+### AppContext State
+```ts
+{
+  brainScore: number;      // 0-1000
+  xp: number; level: number; streak: number;
+  energy: number;          // 0-1000, resets daily
+  stats: {                 // all 0-100
+    speed, memory, logic, focus, mathIQ
+  };
+  history: HistoryEntry[];     // MCQ session history
+  gameSessions: GameSession[]; // mini-game sessions (500 max)
+  highScores: Record<string, number>; // per game
+  totalGamesPlayed: number; totalCorrect: number; totalWrong: number;
+  missions: Mission[];
+  settings: { sound, notifications, difficulty, dailyGoal };
+}
 ```
 
-## TypeScript & Composite Projects
+### Analytics Tracking
+Each GameSession stores: gameId, gameName, domain, score, accuracy, avgResponseMs, correct, wrong, maxCombo, xpEarned, difficulty, timestamp
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+## Game Mechanics
+- ❤️ Lives system (3-5 lives per game)
+- 🔥 Combo multiplier (up to ×5)
+- ⚡ Energy cost per game (8-20 energy)
+- 🏆 High score tracking per game
+- Adaptive difficulty: speed/numbers increase as you progress
+- XP → Level progression (level × 100 XP per level)
+- Stats improve based on accuracy (≥80% = +2, ≥60% = +1)
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+## Environment Variables
+- `VITE_OPENROUTER_API_KEY` — OpenRouter API key for AI MCQ generation
 
-## Root Scripts
+## CSS Design System
+- Background: `#0A0A1A` (deep dark navy)
+- Primary: `#00FFFF` (neon cyan)
+- Accent: `#8A2BE2` (violet)
+- Glass: `.glass-panel` — backdrop blur + border
+- Glow: `.box-glow-cyan`, `.text-glow-cyan`
+- Animate: `.animate-pulse-score`, `.particle`
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
-
-## Packages
-
-### `artifacts/api-server` (`@workspace/api-server`)
-
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
-
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
-
-### `lib/db` (`@workspace/db`)
-
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
-
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+## Port
+- Vite dev server: port from `$PORT` env var (currently 21394)

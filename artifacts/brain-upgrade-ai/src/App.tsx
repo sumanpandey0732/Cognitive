@@ -12,6 +12,8 @@ import Analytics from "@/pages/Analytics";
 import SkillTree from "@/pages/SkillTree";
 import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
+import Games from "@/pages/Games";
+import GamePlay from "@/pages/GamePlay";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,8 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/train" component={Train} />
+        <Route path="/games" component={Games} />
+        <Route path="/play/:id" component={GamePlay} />
         <Route path="/challenge" component={Challenge} />
         <Route path="/missions" component={Missions} />
         <Route path="/stats" component={Stats} />
