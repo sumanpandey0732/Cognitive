@@ -4,71 +4,90 @@ import { GameSession } from '@/context/AppContext';
 
 interface Props { onFinish: (s: Partial<GameSession>) => void; }
 
-const GRID_SIZE = 25;
+const GRID = 25;
 
-function makeGrid() {
-  return Array.from({ length: GRID_SIZE }, (_, i) => ({
-    num: i + 1,
-    x: Math.random() * 80 + 5,
-    y: Math.random() * 80 + 5,
-  }));
-}
+function shuffle<T>(arr: T[]) { return [...arr].sort(() => Math.random() - 0.5); }
 
 export default function NumberTap({ onFinish }: Props) {
-  const [grid, setGrid] = useState(makeGrid);
+  const ROUNDS = 3;
+  const G = useRef({ score: 0, correct: 0, wrong: 0, maxCombo: 0, combo: 0, round: 1, done: false, startMs: Date.now() });
+  const [numbers, setNumbers] = useState<number[]>(() => shuffle(Array.from({ length: GRID }, (_, i) => i + 1)));
   const [next, setNext] = useState(1);
-  const [errors, setErrors] = useState(0);
-  const [startTime] = useState(Date.now());
+  const [tapped, setTapped] = useState<number[]>([]);
+  const [startTime, setStartTime] = useState(Date.now());
   const [elapsed, setElapsed] = useState(0);
-  const [flash, setFlash] = useState<{ num: number; ok: boolean } | null>(null);
-  const [done, setDone] = useState(false);
+  const [flash, setFlash] = useState<{ n: number; ok: boolean } | null>(null);
+  const [tick, setTick] = useState(0);
+  const re = () => setTick(t => t + 1);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
 
   useEffect(() => {
-    timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+    setStartTime(Date.now());
+    timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 500);
     return () => clearInterval(timerRef.current);
-  }, []);
+  }, [G.current.round]);
 
-  const tap = (num: number) => {
-    if (done) return;
-    if (num === next) {
-      setFlash({ num, ok: true });
-      setTimeout(() => setFlash(null), 300);
-      const newNext = next + 1;
-      setNext(newNext);
-      setGrid(prev => prev.filter(p => p.num !== num));
-      if (newNext > GRID_SIZE) {
-        clearInterval(timerRef.current);
-        setDone(true);
-        onFinish({
-          gameId: 'number-tap', gameName: 'Number Tap', domain: 'Focus',
-          score: Math.max(0, 5000 - elapsed * 20 - errors * 100),
-          accuracy: Math.round((GRID_SIZE / (GRID_SIZE + errors)) * 100),
-          avgResponseMs: Math.round((Date.now() - startTime) / GRID_SIZE),
-          correct: GRID_SIZE, wrong: errors, maxCombo: GRID_SIZE - errors,
-          difficulty: 2, xpEarned: Math.max(10, 50 - errors * 3)
-        });
+  function finish() {
+    clearInterval(timerRef.current);
+    G.current.done = true;
+    const total = G.current.correct + G.current.wrong;
+    onFinish({
+      gameId: 'number-tap', gameName: 'Number Tap', domain: 'Focus',
+      score: G.current.score,
+      accuracy: total > 0 ? Math.round(G.current.correct / total * 100) : 0,
+      avgResponseMs: Math.round((Date.now() - G.current.startMs) / Math.max(1, GRID * G.current.round)),
+      correct: G.current.correct, wrong: G.current.wrong,
+      maxCombo: G.current.maxCombo, difficulty: 2,
+      xpEarned: Math.floor(G.current.score / 5)
+    });
+    re();
+  }
+
+  function tapNumber(n: number) {
+    if (G.current.done || tapped.includes(n)) return;
+    const ok = n === next;
+    setFlash({ n, ok });
+    setTimeout(() => setFlash(null), 300);
+
+    if (ok) {
+      G.current.combo += 1;
+      G.current.maxCombo = Math.max(G.current.maxCombo, G.current.combo);
+      G.current.score += 5 * Math.min(G.current.combo, 4);
+      G.current.correct += 1;
+      setTapped(prev => [...prev, n]);
+      if (n === GRID) {
+        // Round complete
+        if (G.current.round >= ROUNDS) { setTimeout(finish, 500); }
+        else {
+          setTimeout(() => {
+            G.current.round += 1;
+            setTapped([]);
+            setNumbers(shuffle(Array.from({ length: GRID }, (_, i) => i + 1)));
+            setNext(1);
+            re();
+          }, 600);
+        }
+      } else {
+        setNext(n + 1);
       }
     } else {
-      setFlash({ num, ok: false });
-      setTimeout(() => setFlash(null), 300);
-      setErrors(e => e + 1);
+      G.current.combo = 0;
+      G.current.wrong += 1;
+      G.current.score = Math.max(0, G.current.score - 3);
     }
-  };
+    re();
+  }
 
-  const progress = ((next - 1) / GRID_SIZE) * 100;
-
-  if (done) {
+  const g = G.current;
+  if (g.done) {
+    const total = g.correct + g.wrong;
     return (
-      <div className="flex flex-col items-center gap-4 text-center py-8">
-        <div className="text-5xl">🎯</div>
-        <h2 className="text-2xl font-black text-white">Complete!</h2>
+      <div className="flex flex-col items-center gap-4 text-center py-6">
+        <div className="text-5xl">🔢</div>
+        <h2 className="text-2xl font-black text-white">Sequence Complete!</h2>
         <div className="grid grid-cols-3 gap-3">
-          {[['Time', `${elapsed}s`, 'text-cyan-400'], ['Errors', errors, 'text-red-400'], ['Score', Math.max(0, 5000 - elapsed * 20 - errors * 100), 'text-yellow-400']].map(([l, v, c]) => (
-            <div key={l as string} className="glass-panel p-4 rounded-xl">
-              <p className="text-xs text-gray-400">{l}</p>
-              <p className={`text-2xl font-black ${c}`}>{v}</p>
-            </div>
+          {[['Score', g.score, 'text-cyan-400'], ['Accuracy', `${total > 0 ? Math.round(g.correct / total * 100) : 0}%`, 'text-green-400'], ['Rounds', `${ROUNDS}/${ROUNDS}`, 'text-yellow-400']].map(([l, v, c]) => (
+            <div key={l as string} className="glass-panel p-3 rounded-xl"><p className="text-xs text-gray-400">{l}</p><p className={`text-xl font-black ${c}`}>{v}</p></div>
           ))}
         </div>
       </div>
@@ -76,48 +95,39 @@ export default function NumberTap({ onFinish }: Props) {
   }
 
   return (
-    <div className="w-full flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-gray-400">
-          Tap: <span className="text-cyan-400 font-black text-xl">{next}</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-between items-center text-sm">
+        <span className="text-cyan-400 font-bold">Round {g.round}/{ROUNDS}</span>
+        <div className="glass-panel px-4 py-2 rounded-lg text-center">
+          <span className="text-white font-black">Next: </span>
+          <span className="text-yellow-400 font-black text-xl">{next}</span>
         </div>
-        <div className="text-sm font-mono text-yellow-400">{elapsed}s</div>
-        <div className="text-sm text-red-400">Errors: {errors}</div>
+        <span className="text-gray-400 font-mono">{elapsed}s • {g.score}pts</span>
       </div>
-      <div className="w-full bg-white/5 h-2 rounded-full">
-        <motion.div className="h-2 rounded-full bg-gradient-to-r from-cyan-500 to-purple-500"
-          animate={{ width: `${progress}%` }} />
-      </div>
-      <div
-        className="relative w-full rounded-2xl overflow-hidden border border-white/10"
-        style={{ height: 400, background: 'rgba(0,0,0,0.4)' }}>
-        {grid.map(({ num, x, y }) => {
-          const isFlashing = flash?.num === num;
-          const isNext = num === next;
+      <p className="text-center text-xs text-gray-500">Tap numbers 1 → 25 in order as fast as possible</p>
+      <div className="grid grid-cols-5 gap-2">
+        {numbers.map((n) => {
+          const done = tapped.includes(n);
+          const isFlash = flash?.n === n;
           return (
-            <motion.button
-              key={num}
-              className="absolute w-12 h-12 rounded-full font-black text-base flex items-center justify-center cursor-pointer select-none border-2"
-              style={{
-                left: `${x}%`,
-                top: `${y}%`,
-                transform: 'translate(-50%,-50%)',
-                background: isFlashing
-                  ? (flash!.ok ? 'rgba(0,255,100,0.3)' : 'rgba(255,0,0,0.3)')
-                  : isNext ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.05)',
-                borderColor: isNext ? '#00e5ff' : 'rgba(255,255,255,0.1)',
-                boxShadow: isNext ? '0 0 15px rgba(0,229,255,0.5)' : 'none',
-                color: isFlashing ? (flash!.ok ? '#00ff64' : '#ff4444') : '#fff',
-              }}
-              onClick={() => tap(num)}
-              whileTap={{ scale: 0.85 }}
-              animate={isFlashing ? { scale: flash!.ok ? [1.3, 1] : [0.8, 1] } : {}}>
-              {num}
+            <motion.button key={n}
+              onClick={() => tapNumber(n)}
+              whileTap={{ scale: 0.8 }}
+              disabled={done}
+              className={`aspect-square rounded-xl font-black text-lg transition-all border-2 ${
+                done
+                  ? 'bg-green-500/20 border-green-400/30 text-green-400/50 cursor-default'
+                  : isFlash
+                  ? (flash!.ok ? 'bg-green-400/40 border-green-400 text-white' : 'bg-red-400/40 border-red-400 text-white')
+                  : n === next
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(0,229,255,0.4)]'
+                  : 'bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/25'
+              }`}>
+              {done ? '✓' : n}
             </motion.button>
           );
         })}
       </div>
-      <p className="text-center text-xs text-gray-500">Tap numbers 1→25 in order as fast as possible</p>
     </div>
   );
 }
